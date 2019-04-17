@@ -9,8 +9,7 @@
 #>     -b path, --build=path
 #>         set the output directory to path. It must be a valid directory.
 #>         BUILDDIR is set to path if specified, otherwise the default 
-#>         directory _build is used. When targetting Github.io the path should
-#>         target a directory called `docs`.
+#>         directory _build is used.
 #> 
 #>     -a, --all
 #>         rebuild from scratch. Call `make clean` and remove the api directory.
@@ -37,7 +36,7 @@ while [ "$#" -gt 0 ]; do
         --all) all=1; shift 1;;
         --build=*) target="${1#*=}"; shift 1;;
         --help) help 0;;
-        -*) echo "unknow option: $1"; exit 1;;
+        -*) echo "unknown option: $1"; exit 1;;
         *) echo "unexpected argument: $1"; exit 1;;
     esac
 done
@@ -69,6 +68,10 @@ sphinx-apidoc -o api ../wolframclient ../wolframclient/tests*
 # build html
 make html
 
+echo "Compile mma.scss to ./_build/html/_static/mma.css"
+sass ./wri_theme/static/mma.scss > "./_build/html/_static/mma.css"
+
 if [[ ! -z "${target}" ]]; then
+    echo "Copying _build to target: ${target}"
     cp -r "./_build/html/." "${target}"
 fi

@@ -70,7 +70,7 @@ class OAuthSessionBase(object):
         raise NotImplementedError
 
     def authorized(self):
-        """Return a reasonnably accurate state of the authentication status."""
+        """Return a reasonably accurate state of the authentication status."""
         return self._client is not None and bool(
             self._client.client_secret) and bool(
                 self._client.resource_owner_key) and bool(
@@ -125,7 +125,7 @@ class WolframAPICallBase(object):
         self.files = {}
         self.permission_key = permission_key
 
-    def add_parameter(self, name, value):
+    def set_parameter(self, name, value):
         """Add a new API input parameter from a serializable python object."""
         self.parameters[name] = value
         return self
@@ -162,23 +162,24 @@ class WolframAPICallBase(object):
                                  content_type='image/png'):
         """Add a new API image input parameter from binary data.
 
-        If the data in `image_data` does not represent an image in the `PNG` format, the
-        optional parameter `content_type` must be set accordingly to the appropriate content
-        type.
-        e.g: *image/jpeg*, *image/gif*, etc.
+        If the data in `image_data` does not represent an image in the `PNG` format, the optional parameter
+        `content_type` must be set accordingly to the appropriate content type, e.g. *image/jpeg*, *image/gif*, etc.
         """
         return self.add_binary_parameter(name, image_data, filename,
                                          content_type)
 
     def perform(self, **kwargs):
-        """Make the API call, return the result."""
+        """Make the API call and return the result."""
+        raise NotImplementedError
+
+    def perform_future(self, **kwargs):
+        """Make the API call asynchronously and return a future object."""
         raise NotImplementedError
 
     def __repr__(self):
-        return '%s<api=%s>' % (
-            self.__class__.__name__,
-            self.api,
-        )
+        return '<%s api=%s, parameters=%s>' % (
+            self.__class__.__name__, self.api,
+            set().union(self.parameters.keys(), self.files.keys()) or None)
 
     def __str__(self):
         return repr(self)

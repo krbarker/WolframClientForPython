@@ -3,11 +3,11 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 from wolframclient.language.exceptions import WolframLanguageException
-from wolframclient.logger.utils import str_trim
+from wolframclient.utils.logger import str_trim
 
 
 class RequestException(WolframLanguageException):
-    """Error in HTTP request."""
+    """Error in an HTTP request."""
 
     def __init__(self, response, msg=None):
         self.response = response
@@ -20,15 +20,24 @@ class RequestException(WolframLanguageException):
                 self.msg = 'Failed to decode request body.'
 
     def __str__(self):
-        return '<%s>: %s' % (self.response.status(), self.msg or '')
+        if hasattr(self.response, 'status'):
+            if callable(self.response.status):
+                status = self.response.status()
+            else:
+                status = self.response.status
+        elif hasattr(self.response, 'status_code'):
+            status = self.response.status_code
+        else:
+            status = 'N/A'
+        return '<status: %s> %s' % (status, self.msg or '')
 
 
 class AuthenticationException(RequestException):
-    """Error in authentication request."""
+    """Error in an authentication request."""
 
 
 class WolframKernelException(WolframLanguageException):
-    """Error while interacting with a Wolfram Kernel."""
+    """Error while interacting with a Wolfram kernel."""
 
 
 class WolframEvaluationException(WolframLanguageException):
@@ -46,8 +55,9 @@ class WolframEvaluationException(WolframLanguageException):
         return self.error
 
     def __repr__(self):
-        return 'WolframEvaluationException<error=%s, expr=%s, messages=%i>:' % (
-            self.error, str_trim(self.result), len(self.messages))
+        return '<%s error=%s, expr=%s, messages=%i>:' % (
+            self.__class__.__name__, self.error, str_trim(self.result),
+            len(self.messages))
 
 
 class SocketException(WolframLanguageException):
@@ -60,5 +70,6 @@ class WolframParserException(WolframLanguageException):
 
 __all__ = [
     'WolframLanguageException', 'RequestException', 'AuthenticationException',
-    'WolframKernelException', 'SocketException', 'WolframParserException'
+    'WolframKernelException', 'SocketException', 'WolframParserException',
+    'WolframEvaluationException'
 ]

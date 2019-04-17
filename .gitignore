@@ -8,3 +8,5 @@ wolframclient/tests/local_config.json
 /htmlcov
 .coverage
 .vscode
+*.code-workspace
+/test-reports

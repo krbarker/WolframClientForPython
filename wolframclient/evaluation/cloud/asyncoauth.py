@@ -3,15 +3,12 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import logging
-import ssl
-
-from aiohttp import FormData, StringPayload
 
 from wolframclient.evaluation.cloud.base import (OAuthAsyncSessionBase,
                                                  UserIDPassword)
 from wolframclient.exception import AuthenticationException
 from wolframclient.utils import six
-from wolframclient.utils.api import oauth
+from wolframclient.utils.api import aiohttp, oauth, ssl
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +22,20 @@ class OAuthAIOHttpAsyncSessionBase(OAuthAsyncSessionBase):
                  consumer_key,
                  consumer_secret,
                  signature_method=None,
-                 client_class=oauth.Client,
-                 ssl_context_class=ssl.SSLContext):
+                 client_class=None,
+                 ssl_context_class=None):
         super().__init__(
             server,
             consumer_key,
             consumer_secret,
             signature_method=signature_method,
-            client_class=client_class)
+            client_class=client_class or oauth.Client)
         self.http_session = http_session
-        self.ssl_context_class = ssl_context_class
+        self.ssl_context_class = ssl_context_class or ssl.SSLContext
         if self.server.certificate is not None:
-            self._ssl_context = self.ssl_context_class(self.server.certificate)
+            self._ssl_context = self.ssl_context_class()
+            self._ssl_context.load_verify_locations(self.server.certificate)
+            # self._ssl_context = ssl.create_default_context(cafile=self.server.certificate)
         else:
             self._ssl_context = None
 
@@ -51,8 +50,9 @@ class OAuthAIOHttpAsyncSessionBase(OAuthAsyncSessionBase):
         sign_body = False
 
         # Payload Instances are not encoded (e.g: octet stream). Only FormData are.
-        form_encoded = isinstance(data, FormData) and not data.is_multipart
-        multipart = isinstance(data, FormData) and data.is_multipart
+        form_encoded = isinstance(data,
+                                  aiohttp.FormData) and not data.is_multipart
+        multipart = isinstance(data, aiohttp.FormData) and data.is_multipart
         # only form encoded body are signed.
         # Non multipart FormData are url encoded: need signed request. We need to get back the body
         # as a string.
@@ -76,7 +76,7 @@ class OAuthAIOHttpAsyncSessionBase(OAuthAsyncSessionBase):
         if multipart or not form_encoded:
             body = data
         else:
-            body = StringPayload(signed_body)
+            body = aiohttp.StringPayload(signed_body)
         return await self.http_session.request(
             method, uri, data=body, headers=req_headers, ssl=self._ssl_context)
 
@@ -175,10 +175,6 @@ class XAuthAIOHttpAsyncSession(OAuthAIOHttpAsyncSessionBase):
             logger.debug('xauth authentication of user %s',
                          self.xauth_credentials.user)
         client = self.client_class(self.consumer_key, self.consumer_secret)
-        params = {}
-        params["x_auth_username"] = self.xauth_credentials.user
-        params["x_auth_password"] = self.xauth_credentials.password
-        params["x_auth_mode"] = "client_auth"
 
         # avoid dumping password in log files.
         logging.disable(logging.DEBUG)
@@ -187,7 +183,11 @@ class XAuthAIOHttpAsyncSession(OAuthAIOHttpAsyncSessionBase):
             self.server.access_token_endpoint,
             'POST',
             headers=self.DEFAULT_CONTENT_TYPE,
-            body=params)
+            body={
+                "x_auth_username": self.xauth_credentials.user,
+                "x_auth_password": self.xauth_credentials.password,
+                "x_auth_mode": "client_auth",
+            })
 
         logging.disable(logging.NOTSET)
 
@@ -201,11 +201,8 @@ class XAuthAIOHttpAsyncSession(OAuthAIOHttpAsyncSessionBase):
 
 
 class _AsyncBytesIO(object):
-    def __init__(self, initalbytes=None):
-        if initalbytes:
-            self.buffer = six.BytesIO(initalbytes)
-        else:
-            self.buffer = six.BytesIO()
+    def __init__(self, initial_bytes=None):
+        self.buffer = six.BytesIO(initial_bytes)
 
     async def write(self, value):
         self.buffer.write(value)

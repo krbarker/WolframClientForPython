@@ -1,29 +1,40 @@
 ###########
-API: Guide
+Guide
 ###########
 
 .. toctree::
    :maxdepth: 4
 
-The library provides features through the classes and functions listed on this page. There are grouped by functionality and cover topics ranging from basic usage to most advanced features.
+The Wolfram Client Library is structured in submodules all located in :mod:`wolframclient`:
 
-Wolfram Language Expression Representation
+* :mod:`~wolframclient.evaluation` provides convenient methods to evaluate Wolfram Language expressions directly from Python. There are many ways to evaluate code, including evaluation by a local kernel, direct evaluation by a public or private Wolfram Cloud or calling a deployed API.
+
+* :mod:`~wolframclient.language` provides a Python representation of Wolfram Language symbols and functions.
+
+* :mod:`~wolframclient.serializers` provides serialization methods to various formats such as string :wl:`InputForm` and binary :wl:`WXF` format.
+
+* :mod:`~wolframclient.deserializers` contains a parser for :wl:`WXF`.
+
+* :mod:`~wolframclient.exception` regroups the exceptions and errors that the library may raise.
+
+
+Expression Representation
 ===========================================
 
 
-.. autofunction:: wolframclient.language.wl
+.. autodata:: wolframclient.language.wl
     :noindex:
 
-.. autofunction:: wolframclient.language.wlexpr
+.. autodata:: wolframclient.language.wlexpr
     :noindex:
 
-.. autofunction:: wolframclient.language.System
+.. autodata:: wolframclient.language.System
     :noindex:
 
-.. autofunction:: wolframclient.language.Global
+.. autodata:: wolframclient.language.Global
     :noindex:
 
-.. autofunction:: wolframclient.language.expression.WLSymbolFactory
+.. autoclass:: wolframclient.language.expression.WLSymbolFactory
     :noindex:
 
 
@@ -36,19 +47,19 @@ Serialization
 Formats
 --------
 
-*InputForm* is the default format and is the most readable one::
+:wl:`InputForm` is the default format and is the most readable one::
 
     >>> export([1, 2, 3], target_format = "wl")
     '{1, 2, 3}'
 
-Serialized output can be imported in a kernel using `ToExpression`.
+Serialized output can be imported in a kernel using :wl:`ToExpression`.
 
-*WXF* is also available as an efficient binary representation of Wolfram Language expressions::
+:wl:`WXF` is also available as an efficient binary representation of Wolfram Language expressions::
 
     >>> export([1, 2, 3], target_format = "wxf")
     '8:f\x03s\x04ListC\x01C\x02C\x03'
 
-The *WXF* format supports compression using zlib, the compression is disabled by default::
+The :wl:`WXF` format supports compression using *zlib*; the compression is disabled by default::
 
     >>> export([1, 2, 3], target_format = "wxf", compress = True)
     '8C:x\x9cKc.f\xf1\xc9,.qftfrf\x06\x00\x1b\xf8\x03L'
@@ -61,7 +72,7 @@ Supported Types
 Built-in Data Types
 ^^^^^^^^^^^^^^^^^^^
 
-Built-in data structures are all supported: :class:`list`, :class:`set`, :class:`frozenset`, :class:`dict`.
+Built-in data structures are all supported :class:`list`, :class:`set`, :class:`frozenset` and :class:`dict`.
 
 Example::
 
@@ -84,7 +95,7 @@ Python generators are also serialized as :wl:`List`::
 
 .. note ::
 
-    Python generators should be used preferably when serializing big data, to avoid running out of memory.
+    Python generators should preferably be used when serializing big data to avoid running out of memory.
 
 To preserve ordering in associations use :class:`collections.OrderedDict`::
 
@@ -95,7 +106,7 @@ To preserve ordering in associations use :class:`collections.OrderedDict`::
 Numeric Types
 ^^^^^^^^^^^^^
 
-Numeric types are natively supported: :class:`int`, :class:`float`, :class:`complex` and :class:`~decimal.Decimal` serializes to
+Numeric types are natively supported; :class:`int`, :class:`float`, :class:`complex` and :class:`~decimal.Decimal` serialize to
 their Wolfram Language counterpart::
 
     >>> export({'int': 1, 'float':2.3, 'decimal': decimal.Decimal(1), 'complex': complex(3, 4)})
@@ -114,18 +125,18 @@ IEEE exceptions `infinity` and `NaN` are converted respectively to :wl:`Directed
 DateObject Serialization
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-:mod:`datetime`, :class:`~datetime.time` and :class:`~datetime.date` are serialized to :wl:`DateObject` and all assume that the timezome to use is the current one at evaluation time::
+:mod:`datetime`, :class:`~datetime.time` and :class:`~datetime.date` are serialized to :wl:`DateObject` and all assume that the time zone to use is the current one at evaluation time::
 
     >>> import datetime
     >>> now = datetime.datetime.now()
     >>> export([now.time(), now.date(), now])
     '{TimeObject[{16, 1, 19.993822}, TimeZone -> $TimeZone], DateObject[{2018, 3, 16}], DateObject[{2018, 3, 16, 16, 1, 19.993822}, "Instant", "Gregorian", $TimeZone]}'
 
-:class:`~datetime.timedelta` are serialized to :wl:`Quantity`::
+:class:`~datetime.timedelta` is serialized to :wl:`Quantity`::
 
     >>> export(datetime.timedelta(seconds = 340))
 
-Specify a timezone in Python using :func:`pytz.timezone` and serialize the date to a :wl:`DateObject`::
+Specify a time zone in Python using :func:`pytz.timezone` and serialize the date to a :wl:`DateObject`::
 
     >>> from pytz import timezone
     >>> export(timezone('US/Eastern').localize(datetime.datetime.now()))
@@ -133,12 +144,16 @@ Specify a timezone in Python using :func:`pytz.timezone` and serialize the date 
 
 .. _extensible-serialization:
 
-Extensible mechanism
+Extensible Mechanism
 --------------------
 
-The :mod:`~wolframclient.serializers` module provides mechanisms to extend built-in core functions and to define custom class serializations. One way is to extend :class:`~wolframclient.serializers.serializable.WLSerializable` and override :func:`~wolframclient.serializers.serializable.WLSerializable.to_wl`. An other is to define a normalizer function.
+The :mod:`~wolframclient.serializers` module provides mechanisms to extend built-in core functions and to define custom class serializations. There are three ways to extend serialization:
 
-Serializable classes
+* Extend :class:`~wolframclient.serializers.serializable.WLSerializable` and override its :meth:`~wolframclient.serializers.serializable.WLSerializable.to_wl` method.
+* Call :func:`~wolframclient.serializers.export` with `normalizer` set to a normalizer function. This function will be applied to each object prior to the serialization process.
+* Declare a type encoder.
+
+Serializable Classes
 ^^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: wolframclient.serializers.serializable.WLSerializable
@@ -149,9 +164,9 @@ Serializable classes
 Normalizer
 ^^^^^^^^^^
 
-The serialization process is built on top of a chain of normalizers. A normalizer is a function that takes one argument and return one python object. Each normalizer can either return a new object or pass the input if they can't deal with its type. Built-in normalizers are applied first and when one consumes the input and returns an other object the chain is applied from the beginning on the new object. In :class:`~wolframclient.serializers.serializable.WLSerializable` we build a new class `MyPythonClass` extending `WLSerializable` that was serialized to Wolfram Language ``MyWolframFunction[...]``. Let's take a new approach based on normalizer to achieve the same result.
+A normalizer is a function that takes one argument and returns one python object. It can either return a new object or pass the input if it can't deal with that type.
 
-The class can be defined as follow::
+Define a class::
 
     class MyPythonClass(object):
         def __init__(self, *arguments):
@@ -159,36 +174,43 @@ The class can be defined as follow::
 
 Define a normalizer function::
 
+    from wolframclient.language import wl
+    from wolframclient.serializers import export
+    
     def normalizer(o):
         if isinstance(o, MyPythonClass):
             return wl.MyWolframFunction(*o.arguments)
         # don't forget to return the input if we can't deal with the type.
         return o
 
-Serialize the function:
+Serialize an instance of :data:`MyPythonClass` using the normalizer function defined previously::
 
     >>> export(MyPythonClass(1,2), normalizer=normalizer)
     b'MyWolframFunction[1, 2]'
 
+Encoder
+^^^^^^^^
+
+The serialization of a Python object relies on encoder functions. Each encoder is attached to a set of Python types. Encoders are generators of bytes. The library defines encoders for most built-in Python types and for the core components of some popular libraries such as PIL :data:`Image`, NumPy arrays and Pandas :data:`Series`.
+
+.. autodata:: wolframclient.serializers.encoder.wolfram_encoder
+    :noindex:
+
 Deserialization
 ==================
 
-.. autofunction:: wolframclient.deserializers.binary_deserialize
+.. autodata:: wolframclient.deserializers.binary_deserialize
     :noindex:
 
 
-Kernel evaluation
-==================
+Evaluating Expressions
+======================
 
 .. autoclass:: wolframclient.evaluation.WolframLanguageSession
     :noindex:
     :members:
 
 .. autoclass:: wolframclient.evaluation.WolframLanguageAsyncSession
-    :noindex:
-    :members:
-
-.. autoclass:: wolframclient.evaluation.WolframLanguageFutureSession
     :noindex:
     :members:
 
@@ -203,12 +225,16 @@ Kernel evaluation
     :noindex:
     :members:
 
-.. autoclass:: wolframclient.evaluation.WolframEvaluationJSONResponse
+.. autoclass:: wolframclient.evaluation.WolframAPIResponse
     :noindex:
     :members:
 
-API call
-========
+.. autoclass:: wolframclient.evaluation.WolframAPIResponseAsync
+    :noindex:
+    :members:
+
+Cloud API
+=========
 
 .. autoclass:: wolframclient.evaluation.WolframCloudSession
     :noindex:

@@ -8,7 +8,7 @@ import warnings
 from wolframclient.language import wlexpr
 from wolframclient.language.expression import WLFunction
 from wolframclient.utils import six
-from wolframclient.utils.asyncio import wait_all
+from wolframclient.utils.functional import map
 
 
 class WolframEvaluatorBase(object):
@@ -37,7 +37,7 @@ class WolframEvaluatorBase(object):
                 (self.__class__.__name__, self), ResourceWarning, **kwargs)
 
     def normalize_input(self, expr):
-        """ Normalize a given python object representing an expr to as object
+        """ Normalize a given Python object representing an expr to as object
         as expected by evaluators.
         """
         if self.inputform_string_evaluation and isinstance(
@@ -45,6 +45,10 @@ class WolframEvaluatorBase(object):
             return wlexpr(expr)
         else:
             return expr
+
+    def duplicate(self):
+        """ Build a new instance using the same configuration as the one being duplicated. """
+        raise NotImplementedError
 
 
 class WolframEvaluator(WolframEvaluatorBase):
@@ -54,43 +58,59 @@ class WolframEvaluator(WolframEvaluatorBase):
         """ Evaluate a given Wolfram Language expression. """
         return self.evaluate_wrap(expr).get()
 
+    def evaluate_future(self, expr):
+        """ Evaluate a given Wolfram Language expression asynchronously.
+        
+        Return a :class:`~concurrent.futures.Future` object. """
+        raise NotImplementedError
+
     def evaluate_many(self, expr_list):
-        """ Evaluate a given list of Wolfram Language expression.
+        """ Evaluate a given list of Wolfram Language expressions.
         
         The list is provided as an iterable object. 
         """
-        return map(self.evaluate, expr_list)
+        # for consistency with the async version, return a list.
+        return list(map(self.evaluate, expr_list))
 
     def evaluate_wrap(self, expr):
-        """ Evaluate a given Wolfram Language expression and return a result object with the result and meta information. """
+        """ Evaluate a given Wolfram Language expression and return a result object with the result and meta
+        information. """
+        raise NotImplementedError
+
+    def evaluate_wrap_future(self, expr):
+        """ Asynchronously call `evaluate_wrap`.
+        
+        Return a :class:`~concurrent.futures.Future` object. """
         raise NotImplementedError
 
     def start(self):
         """ Start the evaluator. 
         
-        Once this function was called, the evaluator must be ready to evaluate incoming expressions. 
+        Once this function is called, the evaluator must be ready to evaluate incoming expressions.
         """
         raise NotImplementedError
 
     def stop(self):
-        """ Gracefully stop the evaluator. Try to stop the evaluator, but wait for current evaluation to finish first. """
+        """ Gracefully stop the evaluator. Try to stop the evaluator but wait for the current evaluation to finish
+        first.
+        """
         raise NotImplementedError
 
     def terminate(self):
-        """ Immediatly stop the evaluator, eventually killing running jobs resulting in cancelled evaluations. """
+        """ Immediately stop the evaluator, which will kill the running jobs, resulting in cancelled evaluations. """
         raise NotImplementedError
 
     def restart(self):
-        """ Restart a given evaluator by stopping it in case it was already started. """
+        """ Restart a given evaluator by stopping it in cases where it is already started. """
         if self.started:
             self.stop()
         self.start()
 
     def function(self, expr):
-        """Return a python function from a Wolfram Language function `expr`.
+        """Return a Python function from a Wolfram Language function `expr`.
 
-        The object returned can be applied on arguments as any other Python function, and
-        is evaluated using the underlying Wolfram evaluator.
+        The object returned can be applied on arguments as any other Python function and is evaluated using the
+        underlying Wolfram evaluator.
         """
         normalized_expr = self.normalize_input(expr)
 
@@ -99,9 +119,16 @@ class WolframEvaluator(WolframEvaluatorBase):
 
         return inner
 
-    def duplicate(self):
-        """ Build a new instance using the same configuration as the one being duplicated. """
-        raise NotImplementedError
+    def function_future(self, expr):
+        """Return a Python function from a Wolfram Language function `expr`, that evaluates asynchronously, returning a
+         future object. """
+        normalized_expr = self.normalize_input(expr)
+
+        def inner(*args, **opts):
+            return self.evaluate_future(
+                WLFunction(normalized_expr, *args, **opts))
+
+        return inner
 
     def __enter__(self):
         """Evaluator must be usable with context managers."""
@@ -131,7 +158,8 @@ class WolframAsyncEvaluator(WolframEvaluatorBase):
         return await result.get()
 
     async def evaluate_many(self, expr_list):
-        return await wait_all(map(self.evaluate, expr_list), loop=self._loop)
+        return await asyncio.gather(
+            *map(self.evaluate, expr_list), loop=self._loop)
 
     async def evaluate_wrap(self, expr):
         raise NotImplementedError
@@ -150,9 +178,6 @@ class WolframAsyncEvaluator(WolframEvaluatorBase):
         if self.started:
             await self.stop()
         await self.start()
-
-    def duplicate(self):
-        raise NotImplementedError
 
     def function(self, expr):
         """ Return a coroutine from a Wolfram Language function. 

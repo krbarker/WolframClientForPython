@@ -10,12 +10,9 @@ __all__ = ['WolframServer']
 class WolframServer(object):
     ''' Represents the cloud server.
 
-    Contains the authentication endpoints informations, the API endpoint aka. the
+    Contains the authentication endpoints information, the API endpoint aka. the
     cloud base (`$CloudBase` in the Wolfram Language), and eventually the xauth
     consumer key and secret.
-
-    For conveniency this class exposes static methods to build instances from
-    a `Configuration` or from a file path.
     '''
 
     def __init__(self,
@@ -39,9 +36,15 @@ class WolframServer(object):
     def is_xauth(self):
         return self.xauth_consumer_key is not None and self.xauth_consumer_secret is not None
 
+    def __repr__(self):
+        return '<%s: cloudbase=%s, request_token=%s, access_token=%s, certificate=%s, xauth support=%s>' % (
+            self.__class__.__name__, self.cloudbase,
+            self.request_token_endpoint, self.access_token_endpoint,
+            self.certificate, self.is_xauth())
 
-# A built-in instance representing the Wolfram public Cloud.
-WolframPublicCloudServer = WolframServer(
+
+# A built-in instance representing the Wolfram Public Cloud.
+WOLFRAM_PUBLIC_CLOUD_SERVER = WolframServer(
     'https://www.wolframcloud.com',
     'https://account.wolfram.com/auth/request-token',
     'https://account.wolfram.com/auth/access-token',

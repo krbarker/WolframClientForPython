@@ -18,6 +18,8 @@ PY_36 = sys.version_info >= (3, 6)
 PY_37 = sys.version_info >= (3, 7)
 
 WINDOWS = platform.system() == 'Windows'
+LINUX = platform.system() == 'Linux'
+MACOS = platform.system() == 'Darwin'
 
 JYTHON = sys.platform.startswith('java')
 
@@ -56,7 +58,7 @@ else:
         memoryview = buffer
     buffer_types = (bytearray, memoryview, buffer)
 
-iterable_types = (list, tuple, set, frozenset, types.GeneratorType)
+iterable_types = (list, tuple, set, frozenset, types.GeneratorType, chain)
 
 protected_types = tuple(
     chain(string_types, integer_types,

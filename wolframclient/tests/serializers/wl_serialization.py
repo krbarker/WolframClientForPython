@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import datetime
 import decimal
+import unittest
 import fractions
 from collections import OrderedDict
 
@@ -13,7 +14,7 @@ from wolframclient.utils import six
 from wolframclient.utils.api import pytz
 from wolframclient.utils.datastructures import Association
 from wolframclient.utils.encoding import force_bytes
-from wolframclient.utils.tests import TestCase as BaseTestCase
+from wolframclient.utils.tests import TestCase as BaseTestCase, path_to_file_in_data_dir
 
 
 def test_datetime():
@@ -84,15 +85,15 @@ class TestCase(BaseTestCase):
 
         self.compare(
             test_datetime(),
-            b'DateObject[{2000, 1, 1, 11, 15, 20.0}, "Instant", "Gregorian", $TimeZone]'
+            b'DateObject[{2000, 1, 1, 11, 15, 20.}, "Instant", "Gregorian", $TimeZone]'
         )
         self.compare(
             pytz.FixedOffset(60).localize(test_datetime()),
-            b'DateObject[{2000, 1, 1, 11, 15, 20.0}, "Instant", "Gregorian", 1.0]'
+            b'DateObject[{2000, 1, 1, 11, 15, 20.}, "Instant", "Gregorian", 1.]'
         )
         self.compare(
             pytz.timezone("Europe/Rome").localize(test_datetime()),
-            b'DateObject[{2000, 1, 1, 11, 15, 20.0}, "Instant", "Gregorian", "Europe/Rome"]'
+            b'DateObject[{2000, 1, 1, 11, 15, 20.}, "Instant", "Gregorian", "Europe/Rome"]'
         )
 
     def test_date(self):
@@ -103,14 +104,14 @@ class TestCase(BaseTestCase):
 
         self.compare(
             datetime.timedelta(minutes=1, seconds=30),
-            b'Quantity[90.0, "Seconds"]')
+            b'Quantity[90., "Seconds"]')
 
     def test_time(self):
 
-        self.compare(test_datetime().time(), b'TimeObject[{11, 15, 20.0}]')
+        self.compare(test_datetime().time(), b'TimeObject[{11, 15, 20.}]')
         self.compare(
             pytz.timezone("Europe/Rome").localize(test_datetime()).timetz(),
-            b'TimeObject[{11, 15, 20.0}, TimeZone -> 1.0]')
+            b'TimeObject[{11, 15, 20.}, TimeZone -> 1.]')
 
     def test_symbol_factory(self):
 
@@ -121,6 +122,16 @@ class TestCase(BaseTestCase):
         self.compare(wl.This.Thing.Just.Works, b'This`Thing`Just`Works')
         self.compare(
             wl.This.Thing.Just.Works(1, 2), b'This`Thing`Just`Works[1, 2]')
+
+
+    @unittest.skipIf(not six.PY2, 'Python2 str test skipped.')
+    def test_all_str_py2(self):
+        str_all_chr = b''.join([chr(i) for i in range(0, 256)])
+        wl_data = export(str_all_chr, target_format='wl')
+        with open(path_to_file_in_data_dir('allbytes.wl'), 'rb') as r_file:
+            expected = bytearray(r_file.read())
+        self.assertSequenceEqual(wl_data, expected)
+
 
     def test_encoding(self):
 
@@ -191,12 +202,9 @@ class TestCase(BaseTestCase):
 
     def test_input_form(self):
 
-        self.compare(
-            wlexpr('<|"2" -> 2|>'),
-            b'(<|"2" -> 2|>)'
-        )
+        self.compare(wlexpr('<|"2" -> 2|>'), b'(<|"2" -> 2|>)')
 
         self.compare(
-            wl.Foo(2, wlexpr('#foo &')(wlexpr('<|"foo" -> 2|>'))),
-            b'Foo[2, (#foo &)[(<|"foo" -> 2|>)]]'
-        )
+            wl.Foo(2,
+                   wlexpr('#foo &')(wlexpr('<|"foo" -> 2|>'))),
+            b'Foo[2, (#foo &)[(<|"foo" -> 2|>)]]')

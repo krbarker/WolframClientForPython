@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import, print_function, unicode_literals
 
+import cProfile
 import decimal
 import os
 import tempfile
@@ -26,6 +27,10 @@ class Command(SimpleCommand):
     col_size = 8
     repetitions = 10
     complexity = [1, 2, 5, 10, 100, 1000]
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--profile', dest='profile', default=False, action='store_true')
 
     def complexity_handler(self, complexity):
         return {
@@ -61,7 +66,7 @@ class Command(SimpleCommand):
     def table_divider(self, length):
         self.print(*("-" * self.col_size for i in range(length)))
 
-    def handle(self, *args):
+    def report(self):
 
         path = tempfile.gettempdir()
 
@@ -69,23 +74,42 @@ class Command(SimpleCommand):
 
         self.print('dumping results in', path)
 
-        self.table_line(
-            "", *(force_text(c).ljust(self.col_size) for c in self.complexity))
-        self.table_divider(len(self.complexity) + 1)
+        #running export to do all lazy loadings
+        export(1)
 
-        for label, export_format, opts in (
-            ("wl", "wl", dict()),
-            ("wxf", "wxf", dict()),
-            ("wxf zip", "wxf", dict(compress=True)),
-        ):
-            self.table_line(
-                label,
-                *(self.formatted_time(
-                    expr,
-                    stream=os.path.join(
+        for title, stream_generator in (
+            ('In memory', lambda complexity: None),
+            ('File', lambda complexity: os.path.join(
                         path, 'benchmark-test-%s.%s' %
-                        (force_text(complexity).zfill(7), export_format)),
-                    target_format=export_format,
-                    **opts) for complexity, expr in benchmarks))
+                        (force_text(complexity).zfill(7), export_format)))
+            ):
+
+            print(title)
+
+            self.table_line(
+                "",
+                *(force_text(c).ljust(self.col_size) for c in self.complexity))
+            self.table_divider(len(self.complexity) + 1)
+
+            for label, export_format, opts in (
+                ("wl", "wl", dict()),
+                ("wxf", "wxf", dict()),
+                ("wxf zip", "wxf", dict(compress=True)),
+            ):
+                self.table_line(
+                    label,
+                    *(self.formatted_time(
+                        expr,
+                        stream=stream_generator(complexity),
+                        target_format=export_format,
+                        **opts) for complexity, expr in benchmarks))
+
+            self.table_line()
 
         self.table_line()
+
+    def handle(self, profile, **opts):
+        if profile:
+            cProfile.runctx('report()', {'report': self.report}, {})
+        else:
+            self.report()

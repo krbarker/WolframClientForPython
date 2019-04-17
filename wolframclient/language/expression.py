@@ -89,25 +89,26 @@ class WLFunction(WLExpressionMeta):
     def __repr__(self):
         if len(self) > 4:
             return '%s[%s, << %i >>, %s]' % (repr(self.head), ', '.join(
-                repr(x)
-                 for x in self.args[:2]), len(self) - 4, ', '.join(
-                     repr(x) for x in self.args[-2:]))
+                repr(x) for x in self.args[:2]), len(self) - 4, ', '.join(
+                    repr(x) for x in self.args[-2:]))
         else:
             return '%s[%s]' % (repr(self.head), ', '.join(
                 repr(x) for x in self.args))
 
 
 class WLSymbolFactory(WLSymbol):
-    """Provide a convenient way to build objects representing arbitrary Wolfram Language expressions through the use of attributes.
+    """Provide a convenient way to build objects representing arbitrary Wolfram Language expressions through the use of
+    attributes.
 
-    This class is conveniently instanciated at startup as: :class:`~wolframclient.language.wl`, :class:`~wolframclient.language.Global` 
-    and :class:`~wolframclient.language.System`. It should be instanciated only to represent many symbols belonging to the same specific
-    context.
+    This class is conveniently instantiated at startup as :class:`~wolframclient.language.wl`,
+    :class:`~wolframclient.language.Global`
+    and :class:`~wolframclient.language.System`. It should be instantiated only to represent many symbols belonging to
+    the same specific context.
 
     Example::
 
-        >>> developer = WLSymbolFactory('Developer')
-        >>> developer.PackedArrayQ
+        >>> dev = WLSymbolFactory('Developer')
+        >>> dev.PackedArrayQ
         Developer`PackedArrayQ
     
     Alternative::
@@ -125,6 +126,7 @@ class WLSymbolFactory(WLSymbol):
         return self.__class__(self.name and '%s`%s' % (self.name, attr)
                               or attr)
 
+
 class WLInputExpression(WLExpressionMeta):
     """ Represent a string input form expression. """
 
@@ -139,3 +141,4 @@ class WLInputExpression(WLExpressionMeta):
 
     def __str__(self):
         return '(%s)' % self.input
+

@@ -5,8 +5,9 @@ from __future__ import absolute_import, print_function, unicode_literals
 import json
 import logging
 
-from wolframclient.logger.utils import setup_logging_to_file
+from wolframclient.utils import six
 from wolframclient.utils.api import os
+from wolframclient.utils.logger import setup_logging_to_file
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,11 @@ def _parse_config(config):
         except KeyError as e:
             logger.warning('Failed to read SAK from json config.', e)
         from wolframclient.evaluation import UserIDPassword
-        user_cred = UserIDPassword(cloud_config['User']['id'],
-                                   cloud_config['User']['password'])
+        if 'User' in cloud_config:
+            user_cred = UserIDPassword(cloud_config['User']['id'],
+                                       cloud_config['User']['password'])
+        else:
+            user_cred = None
     except KeyError as e:
         logger.warning('Failed to parse json config.', e)
     try:
@@ -62,14 +66,14 @@ def _parse_config(config):
             server_json['host'],
             server_json['request_token_endpoint'],
             server_json['access_token_endpoint'],
-            xauth_consumer_key=server_json['xauth_consumer_key'],
-            xauth_consumer_secret=server_json['xauth_consumer_secret'])
+            xauth_consumer_key=server_json.get('xauth_consumer_key', None),
+            xauth_consumer_secret=server_json.get('xauth_consumer_secret',
+                                                  None),
+            certificate=server_json.get('certificate', None))
     except KeyError as e:
         logger.warning('Failed to parse json config.', e)
-    try:
-        kernel_path = json_config['kernel']
-    except KeyError as e:
-        logger.warning('Failed to parse json config.', e)
+
+    kernel_path = json_config.get('kernel', None)
     return sak, user_cred, server, kernel_path
 
 
@@ -85,14 +89,14 @@ server = None
 kernel_path = None
 
 _json_config_path = os.environ.get('WOLFRAMCLIENT_PY_JSON_CONFIG', None)
-if _json_config_path is not None:
+if six.PY_35 and _json_config_path is not None:
     expended_path = os.expanduser(os.expandvars(_json_config_path))
     try:
         with open(expended_path, 'r') as fp:
             json_config = json.load(fp)
             secured_authentication_key, user_configuration, server, kernel_path = _parse_config(
                 json_config)
-    except:
+    except IOError:
         raise ValueError(
             'Failed to find json configuration file %s' % _json_config_path)
 

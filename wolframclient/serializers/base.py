@@ -7,33 +7,33 @@ import inspect
 import re
 from itertools import chain
 
-from wolframclient.serializers.normalizer import Normalizer
+from wolframclient.serializers.encoder import Encoder
 from wolframclient.serializers.wxfencoder.constants import (
     WXF_HEADER_SEPARATOR, WXF_VERSION)
 from wolframclient.serializers.wxfencoder.utils import numeric_array_to_wxf
 from wolframclient.utils import six
-from wolframclient.utils.encoding import force_text
+from wolframclient.utils.api import base64
+from wolframclient.utils.encoding import concatenate_bytes, force_text
 from wolframclient.utils.functional import first
 
 
-class FormatSerializer(Normalizer):
-    def dump(self, data, stream):
+class FormatSerializer(Encoder):
+    def generate_bytes(self, data):
         raise NotImplementedError
 
     def export(self, data, stream=None):
         if stream:
             if isinstance(stream, six.string_types):
                 with open(stream, 'wb') as file:
-                    self.dump(data, file)
+                    for token in self.generate_bytes(data):
+                        file.write(token)
                     return stream
 
-            self.dump(data, stream)
+            for token in self.generate_bytes(data):
+                stream.write(token)
             return stream
 
-        stream = six.BytesIO()
-        stream = self.dump(data, stream)
-        stream.seek(0)
-        return stream.read()
+        return concatenate_bytes(self.generate_bytes(data))
 
     #implementation of several methods
 
@@ -46,9 +46,6 @@ class FormatSerializer(Normalizer):
     def serialize_string(self, obj):
         raise NotImplementedError
 
-    def serialize_bytes(self, obj):
-        raise NotImplementedError
-
     def serialize_float(self, obj):
         raise NotImplementedError
 
@@ -58,6 +55,18 @@ class FormatSerializer(Normalizer):
     def serialize_int(self, obj):
         raise NotImplementedError
 
+    def serialize_bytes(self, bytes, as_byte_array = not six.PY2):
+
+        #by default we are serializing as_byte_array for PY3,
+        #py2 is by default using strings
+
+        if as_byte_array:
+            return self.serialize_function(
+                self.serialize_symbol(b'ByteArray'),
+                ((b'"', base64.b64encode(bytes), b'"'), ))
+        else:
+            return self.serialize_string(force_text(bytes, "iso-8859-1"))
+
     def serialize_input_form(self, string):
         return self.serialize_function(
             self.serialize_symbol(b'ToExpression'),
@@ -65,13 +74,13 @@ class FormatSerializer(Normalizer):
 
     def serialize_numeric_array(self, data, shape, wl_type):
 
-        payload = b''.join(
+        payload = concatenate_bytes(
             chain((WXF_VERSION, WXF_HEADER_SEPARATOR),
                   numeric_array_to_wxf(data, shape, wl_type)))
 
         return self.serialize_function(
             self.serialize_symbol(b'BinaryDeserialize'),
-            (self.serialize_bytes(payload, ), ))
+            (self.serialize_bytes(payload, as_byte_array = True), ))
 
     def serialize_iterable(self, iterable, **opts):
         return self.serialize_function(
@@ -130,9 +139,13 @@ class FormatSerializer(Normalizer):
 
     def _serialize_external_object(self, o):
 
+        yield "System", "Python"
         yield "Type", "PythonFunction"
-        yield "Name", force_text(o.__name__)
-        yield "BuiltIn", inspect.isbuiltin(o),
+
+        if hasattr(o, '__name__'):
+            yield "Name", force_text(o.__name__)
+        else:
+            yield "Name", force_text(o.__class__.__name__)
 
         is_module = inspect.ismodule(o)
 
@@ -146,17 +159,20 @@ class FormatSerializer(Normalizer):
         yield "IsClass", inspect.isclass(o),
         yield "IsFunction", inspect.isfunction(o),
         yield "IsMethod", inspect.ismethod(o),
-        yield "IsCallable", callable(o)
+        yield "IsCallable", callable(o),
 
         if callable(o):
             try:
-                yield "Arguments", first(inspect.getargspec(o))
+                yield "Arguments", map(force_text, first(
+                    inspect.getargspec(o)))
             except TypeError:
                 #this function can fail with TypeError unsupported callable
                 pass
 
     def serialize_external_object(self, obj):
         return self.serialize_function(
-            self.serialize_symbol(b'ExternalObject'), (self.serialize_mapping(
-                (self.normalize(key), self.normalize(value))
+            self.serialize_symbol(
+                callable(obj) and b'ExternalFunction' or b'ExternalObject'),
+            (self.serialize_mapping(
+                (self.encode(key), self.encode(value))
                 for key, value in self._serialize_external_object(obj)), ))

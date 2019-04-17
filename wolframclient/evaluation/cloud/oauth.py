@@ -26,13 +26,13 @@ class OAuthRequestsSyncSessionBase(OAuthSessionBase):
                  consumer_key,
                  consumer_secret,
                  signature_method=None,
-                 client_class=oauth.Client):
+                 client_class=None):
         super().__init__(
             server,
             consumer_key,
             consumer_secret,
             signature_method=signature_method,
-            client_class=client_class)
+            client_class=client_class or oauth.Client)
         self.http_session = http_session
         self.verify = self.server.certificate
 
@@ -43,12 +43,11 @@ class OAuthRequestsSyncSessionBase(OAuthSessionBase):
         try:
             as_json = response.json()
             msg = as_json.get('message', None)
+            raise AuthenticationException(response, msg)
         # msg is None if response is not JSON, but it's fine.
-        except:
-            raise AuthenticationException(
-                response,
-                'Request failed with status %i' % response.status_code)
-        raise AuthenticationException(response, msg)
+        except Exception:
+            msg = 'Request failed with status %i' % response.status_code
+            raise AuthenticationException(response, msg=msg)
 
     def signed_request(self, uri, headers={}, body={}, files={},
                        method='POST'):

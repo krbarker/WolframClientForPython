@@ -3,9 +3,6 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import logging
-import ssl
-
-from aiohttp import BytesPayload, ClientSession, FormData
 
 from wolframclient.evaluation.base import WolframAsyncEvaluator
 from wolframclient.evaluation.cloud.asyncoauth import \
@@ -13,12 +10,13 @@ from wolframclient.evaluation.cloud.asyncoauth import \
 from wolframclient.evaluation.cloud.asyncoauth import \
     XAuthAIOHttpAsyncSession as XAuthAsyncSession
 from wolframclient.evaluation.cloud.base import WolframAPICallBase
-from wolframclient.evaluation.cloud.server import WolframPublicCloudServer
-from wolframclient.evaluation.result import (
-    WolframAPIResponseBuilder, WolframEvaluationJSONResponseAsync)
+from wolframclient.evaluation.cloud.server import WOLFRAM_PUBLIC_CLOUD_SERVER
+from wolframclient.evaluation.result import (WolframAPIResponseBuilder,
+                                             WolframEvaluationWXFResponseAsync)
 from wolframclient.exception import AuthenticationException
 from wolframclient.serializers import export
 from wolframclient.utils import six
+from wolframclient.utils.api import aiohttp, ssl
 from wolframclient.utils.url import evaluation_api_url, user_api_url
 
 logger = logging.getLogger(__name__)
@@ -27,33 +25,50 @@ __all__ = ['WolframCloudAsyncSession', 'WolframAPICallAsync']
 
 
 class WolframCloudAsyncSession(WolframAsyncEvaluator):
+    """ Interact with a Wolfram Cloud asynchronously using coroutines.
+
+    Asynchronous cloud operations are provided through coroutines using modules :mod:`asyncio` and
+    `aiohttp <https://pypi.org/project/aiohttp/>`_.
+
+    Instances of this class can be managed with an asynchronous context manager::
+
+        async with WolframCloudAsyncSession() as session:
+            await session.call(...)
+
+    An event loop can be explicitly passed using the named parameter `loop`; otherwise, the one
+    returned by :func:`~asyncio.get_event_loop` is used.
+    The initialization options of the class :class:`~wolframclient.evaluation.WolframCloudSession` are also supported by
+    this class.
+    """
     def __init__(self,
                  credentials=None,
-                 server=WolframPublicCloudServer,
+                 server=None,
                  loop=None,
                  inputform_string_evaluation=True,
-                 oauth_session_class=OAuthAsyncSession,
-                 xauth_session_class=XAuthAsyncSession,
-                 http_sessionclass=ClientSession,
-                 ssl_context_class=ssl.SSLContext):
+                 oauth_session_class=None,
+                 xauth_session_class=None,
+                 http_sessionclass=None,
+                 ssl_context_class=None):
         super().__init__(
             loop, inputform_string_evaluation=inputform_string_evaluation)
-        self.server = server
+        self.server = server or WOLFRAM_PUBLIC_CLOUD_SERVER
         self.http_session = None
-        self.http_sessionclass = http_sessionclass
+        self.http_sessionclass = http_sessionclass or aiohttp.ClientSession
         self.credentials = credentials
         self.evaluation_api_url = evaluation_api_url(self.server)
-        self.xauth_session_class = xauth_session_class
-        self.oauth_session_class = oauth_session_class
-        self.ssl_context_class = ssl_context_class
+        self.xauth_session_class = xauth_session_class or XAuthAsyncSession
+        self.oauth_session_class = oauth_session_class or OAuthAsyncSession
+        self.ssl_context_class = ssl_context_class or ssl.SSLContext
         self.oauth_session = None
         if self.server.certificate is not None:
-            self._ssl_context = self.ssl_context_class(self.server.certificate)
+            self._ssl_context = self.ssl_context_class()
+            self._ssl_context.load_verify_locations(self.server.certificate)
+            # self._ssl_context = ssl.create_default_context(cafile=self.server.certificate)
         else:
             self._ssl_context = None
 
     def duplicate(self):
-        return WolframCloudAsyncSession(
+        return self.__class__(
             credentials=self.credentials,
             server=self.server,
             loop=self._loop,
@@ -128,16 +143,15 @@ class WolframCloudAsyncSession(WolframAsyncEvaluator):
                    target_format='wl',
                    permissions_key=None,
                    **kwargv):
-        """Call a given API, using the provided input parameters.
+        """Call a given API using the provided input parameters.
 
-        `api` can be a string url or a :class:`tuple` (`username`, `api name`). User name is
-        generally the Wolfram Language symbol ``$UserName``. The API name can be a uuid or a
-        relative path e.g: *myapi/foo/bar*.
+        `api` can be a string url or a :class:`tuple` (`username`, `api name`). The username is generally the Wolfram
+        Language symbol ``$UserName``. The API name can be a UUID or a relative path, e.g. *myapi/foo/bar*.
 
         The input parameters are provided as a dictionary with string keys being the name
         of the parameters associated to their value.
 
-        Files are passed in a dictionary. Value can have multiple forms::
+        Files are passed in a dictionary. Values can have multiple forms::
 
             {'parameter name': file_pointer}
 
@@ -149,8 +163,8 @@ class WolframCloudAsyncSession(WolframAsyncEvaluator):
 
             {'parameter name': ('filename', b'...binary...data...', 'content-type')}
 
-        It's possible to pass a ``PermissionsKey`` to the server along side to the query,
-        and get access to a given resource.
+        It is possible to pass a ``PermissionsKey`` to the server alongside the query and get access to a given
+        resource.
         """
         url = user_api_url(self.server, api)
         params = {}
@@ -196,25 +210,26 @@ class WolframCloudAsyncSession(WolframAsyncEvaluator):
                 ssl=self._ssl_context)
 
     async def _call_evaluation_api(self, expr, **kwargs):
-        data = BytesPayload(export(expr, target_format='wl', **kwargs))
+        data = aiohttp.BytesPayload(export(expr, target_format='wl', **kwargs))
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 'Sending expression to cloud server for evaluation: %s', data)
         response = await self._post(self.evaluation_api_url, data=data)
-        return WolframEvaluationJSONResponseAsync(response)
+        return WolframEvaluationWXFResponseAsync(response)
 
     async def evaluate(self, expr, **kwargs):
-        """Send `expr` to the cloud for evaluation, return the result.
+        """Send `expr` to the cloud for evaluation and return the result.
 
-        `expr` can be a Python object serializable by :func:`~wolframclient.serializers.export`,
-        or a the string InputForm of an expression to evaluate.
+        `expr` can be a Python object serializable by :func:`~wolframclient.serializers.export` or the string
+        :wl:`InputForm` of an expression to evaluate.
         """
         response = await self._call_evaluation_api(
             self.normalize_input(expr), **kwargs)
         return await response.get()
 
     async def evaluate_wrap(self, expr, **kwargs):
-        """ Similar to :func:`~wolframclient.evaluation.cloud.asynccloudsession.WolframCloudAsyncSession.evaluate` but return the result as a :class:`~wolframclient.evaluation.result.WolframEvaluationJSONResponseAsync`.
+        """ Similar to :func:`~wolframclient.evaluation.cloud.asynccloudsession.WolframCloudAsyncSession.evaluate` but
+        return the result as a :class:`~wolframclient.evaluation.result.WolframEvaluationJSONResponseAsync`.
         """
         return await self._call_evaluation_api(
             self.normalize_input(expr), **kwargs)
@@ -233,7 +248,7 @@ class WolframAPICallAsync(WolframAPICallBase):
     """Perform an API call using an asynchronous cloud session. """
 
     async def perform(self, **kwargs):
-        """Make the API call, return the result."""
+        """Make the API call and return the result."""
         return await self.target.call(
             self.api,
             input_parameters=self.parameters,
@@ -283,7 +298,7 @@ def encode_api_inputs(inputs, files={}, target_format='wl', **kwargs):
         raise ValueError(
             'Invalid encoding format %s. Choices are: %s' %
             (target_format, ', '.join(SUPPORTED_ENCODING_FORMATS.keys())))
-    form_data = FormData()
+    form_data = aiohttp.FormData()
     # files are specified by file pointer or bytes, or a tuple.
     for name, file_info in files.items():
         # tuple must contain: the filename, the data as bytes, the content type.

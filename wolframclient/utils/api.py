@@ -27,15 +27,18 @@ os = API(
     dirname='os.path.dirname',
     path_join='os.path.join',
     isfile='os.path.isfile',
+    isdir='os.path.isdir',
     exists='os.path.exists',
     makedirs='os.makedirs',
-    environ='os.environ')
+    environ='os.environ',
+    listdir='os.listdir')
 
 requests = API(
     get='requests.get',
     post='requests.post',
     request='requests.request',
     Request='requests.Request',
+    Response='requests.Response',
     Session='requests.Session')
 
 oauth = API(
@@ -64,6 +67,7 @@ zmq = API(
     SUB='zmq.SUB',
     SUBSCRIBE='zmq.SUBSCRIBE',
     NOBLOCK='zmq.NOBLOCK',
+    LAST_ENDPOINT='zmq.LAST_ENDPOINT',
     Again='zmq.Again')
 
 time = API(perf_counter=('time.perf_counter', 'time.time'), sleep='time.sleep')
@@ -71,8 +75,9 @@ time = API(perf_counter=('time.perf_counter', 'time.time'), sleep='time.sleep')
 futures = API(ThreadPoolExecutor='concurrent.futures.ThreadPoolExecutor')
 
 asyncio = API(
-    create_task=('wolframclient.utils.asyncio.create_task'),
-    ensure_future=('asyncio.ensure_future'),
+    create_task='wolframclient.utils.asyncio.create_task',
+    ensure_future='asyncio.ensure_future',
+    wrap_future='asyncio.wrap_future',
     get_event_loop='asyncio.get_event_loop',
     new_event_loop='asyncio.new_event_loop',
     Queue='asyncio.Queue',
@@ -95,7 +100,7 @@ urllib = API(
     quote_plus=('urllib.parse.quote_plus', 'urllib.quote_plus'),
     quote=('urllib.parse.quote', 'urllib.quote'))
 
-atexit = API(register='atexit.register', unregister=('atexit.unregister', ))
+atexit = API(register='atexit.register', unregister='atexit.unregister')
 
 numpy = API(
     array='numpy.array',
@@ -109,13 +114,21 @@ numpy = API(
     uint16='numpy.uint16',
     uint32='numpy.uint32',
     uint64='numpy.uint64',
+    float16='numpy.float16',
     float32='numpy.float32',
     float64='numpy.float64',
+    float128='numpy.float128',
     complex64='numpy.complex64',
     complex128='numpy.complex128',
+    nan='numpy.nan',
     dtype='numpy.dtype',
     frombuffer='numpy.frombuffer',
-    reshape='numpy.reshape')
+    reshape='numpy.reshape',
+    integer='numpy.integer',
+    floating='numpy.floating',
+    complexfloating='numpy.complexfloating',
+    frexp='numpy.frexp',
+)
 
 multiprocessing = API(Lock='multiprocessing.Lock')
 
@@ -126,3 +139,34 @@ PIL = API(
 )
 
 base64 = API(b64encode='base64.b64encode')
+
+pandas = API(
+    Series='pandas.Series',
+    DataFrame='pandas.DataFrame',
+    DatetimeIndex='pandas.DatetimeIndex',
+    TimedeltaIndex='pandas.TimedeltaIndex',
+    MultiIndex='pandas.MultiIndex',
+    SparseSeries='pandas.SparseSeries',
+    SparseArray='pandas.SparseArray',
+    bdate_range='pandas.bdate_range',
+)
+
+aiohttp = API(
+    Response='aiohttp.web.Response',
+    ClientResponse='aiohttp.ClientResponse',
+    CIMultiDict='aiohttp.multipart.CIMultiDict',
+    RouteTableDef='aiohttp.web.RouteTableDef',
+    Application='aiohttp.web.Application',
+    run_app='aiohttp.web.run_app',
+    BytesPayload='aiohttp.BytesPayload',
+    ClientSession='aiohttp.ClientSession',
+    FormData='aiohttp.FormData',
+    StringPayload='aiohttp.StringPayload',
+)
+
+ssl = API(SSLContext='ssl.SSLContext', )
+
+externalevaluate = API(
+    execute_from_file='wolframclient.utils.externalevaluate.execute_from_file',
+    start_zmq_loop='wolframclient.utils.externalevaluate.start_zmq_loop',
+)
